@@ -1,2 +1,2 @@
 # oc-programs
-Just set of OpenComputers programs
+Just bunch of OpenComputers programs
