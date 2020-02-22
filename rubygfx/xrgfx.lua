@@ -79,8 +79,6 @@ do
     local cmask = ~0xffff
 
     function bset1(buf, i, j, c)
-        c = c or 0xffffff
-        
         i, j = i - 1, j - 1
         local x = (i >> 1) + 1
         local y = (j >> 2) + 1
@@ -102,13 +100,15 @@ do
             v = v & ~0xffff | 0x2800
         end
 
-        buf[i] = v | (1 << bcode) & ~0xFFFFFF0000 | (c << 16)
+        if c ~= nil then
+            v = v & ~0xFFFFFF0000 | (c << 16)
+        end
+
+        buf[i] = v | (1 << bcode)
         return buf
     end
 
     function bset2(buf, i, j, c)
-        c = c or 0xffffff
-        
         i, j = i - 1, j - 1
         local x = (i >> 1) + 1
         local y = (j >> 2) + 1
@@ -130,7 +130,11 @@ do
             v = v & ~0xffff | 0x28ff
         end
 
-        buf[i] = v & ~(1 << bcode) & 0xFFFFFFFFFF | (c << 40)
+        if c ~= nil then
+            v = v & 0xFFFFFFFFFF | (c << 40)
+        end
+
+        buf[i] = v & ~(1 << bcode)
         return buf
     end
 end
