@@ -26,6 +26,11 @@ Virtual component descriptor is a table with following properties:
 ## aa_blake.lua
 **blake** is a boot script/protocol used for simple http-like request-response communications. Can be used synchronously and asynchronously.
 
+### Usage
+Just copy the file into /boot folder and **blake** will be ready to use.
+
+
+
 ##### Caveats
  - The library does not do any packet fragmentation so maximum payload size is limited by the server config
  - Error handling in callbacks should be made manually or by listening to `blake_error` event
