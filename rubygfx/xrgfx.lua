@@ -75,9 +75,6 @@ end
 
 local bset1, bset2
 do
-    local bmask = 0x2800
-    local cmask = ~0xffff
-
     function bset1(buf, i, j, c)
         i, j = i - 1, j - 1
         local x = (i >> 1) + 1
@@ -101,7 +98,7 @@ do
         end
 
         if c ~= nil then
-            v = v & ~0xFFFFFF0000 | (c << 16)
+            v = (v & ~0xFFFFFF0000) | (c << 16)
         end
 
         buf[i] = v | (1 << bcode)
@@ -131,7 +128,7 @@ do
         end
 
         if c ~= nil then
-            v = v & 0xFFFFFFFFFF | (c << 40)
+            v = (v & 0xFFFFFFFFFF) | (c << 40)
         end
 
         buf[i] = v & ~(1 << bcode)

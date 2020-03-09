@@ -22,7 +22,7 @@ local startServer, stopServer
 do -- server
     local servers = {}
 
-    event.listen("modem_message", function(name, localAddr, remoteAddr, port, distance, header, id, data)
+    event.listen("modem_message", function(name, localAddr, remoteAddr, port, distance, header, id, responsePort, data)
         if header == protoHeaderRequest then
             local address = addr(localAddr, port)
 
@@ -34,7 +34,7 @@ do -- server
                     if wasSent then error("message was already sent") end
                 
                     local t = serialization.serialize(pack(...))
-                    if component.invoke(localAddr, "send", remoteAddr, port, protoHeaderResponse, id, t) then
+                    if component.invoke(localAddr, "send", remoteAddr, responsePort, protoHeaderResponse, id, t) then
                         wasSent = true
                         return true
                     else
@@ -46,7 +46,7 @@ do -- server
                     if wasSent then error("message was already sent") end
                 
                     local t = serialization.serialize({ n = 0, error = err or "error" })
-                    if component.invoke(localAddr, "send", remoteAddr, port, protoHeaderResponse, id, t) then
+                    if component.invoke(localAddr, "send", remoteAddr, responsePort, protoHeaderResponse, id, t) then
                         wasSent = true
                         return true
                     else
@@ -57,7 +57,9 @@ do -- server
                 local context = {
                     localAddress = localAddr,
                     remoteAddress = remoteAddr,
-                    port = port,
+                    localPort = port,
+                    remotePort = responsePort,
+                    
                     distance = distance,
                     messageId = id,
                     
@@ -90,17 +92,17 @@ do -- server
     end
 end
 
-local request, cancelRequest
+local request, requestSync, cancelRequest
 do -- client
     local reqId = 0
     local handlers = {}
 
-    function request(address, port, device, timeout)
+    function request(address, port, device, responsePort, timeout)
         assert(type(address) == "string", "address must be a string")
         assert(type(port) == "number", "port must be a number")
 
-        if type(device) == "number" then
-            device, timeout = timeout, device
+        if not responsePort then
+            responsePort = port
         end
 
         if not device then
@@ -115,19 +117,25 @@ do -- client
             timeout = 30
         end
 
+        assert(type(device) == "string", "device address must be a string")
+        assert(type(responsePort) == "number", "response port must be a number")
+        assert(type(timeout) == "number", "timeout must be a number")
+
         return function(handler, ...)
             local id = reqId
             reqId = reqId + 1
         
             local t = serialization.serialize(pack(...))
-            if component.invoke(device, "send", address, port, protoHeaderRequest, id, t) then
+            if component.invoke(device, "send", address, port, protoHeaderRequest, id, responsePort, t) then
                 local timer = event.timer(timeout, function()
                     local handlerData = handlers[id]
                     if handlerData then
                         local context = {
                             localAddress = device,
                             remoteAddress = address,
-                            port = port,
+                            localPort = responsePort,
+                            remotePort = port,
+                            
                             distance = nil,
                             messageId = id,
 
@@ -135,11 +143,11 @@ do -- client
                             error = "timeout exceeded",
 
                             request = function(timeout)
-                                return request(address, port, device, timeout)
+                                return request(address, port, device, timeout, responsePort)
                             end,
 
                             requestSync = function(timeout)
-                                return requestSync(address, port, device, timeout)
+                                return requestSync(address, port, device, timeout, responsePort)
                             end
                         }
 
@@ -176,8 +184,8 @@ do -- client
         end
     end
 
-    function requestSync(address, port, device, timeout)
-        local req = request(address, port, device, timeout)
+    function requestSync(address, port, device, responsePort, timeout)
+        local req = request(address, port, device, responsePort, timeout)
         return function(...)
             local done = false
             local data = nil
@@ -200,18 +208,20 @@ do -- client
                 local context = {
                     localAddress = localAddr,
                     remoteAddress = remoteAddr,
-                    port = port,
+                    localPort = responsePort,
+                    remotePort = port,
+
                     distance = distance,
                     messageId = id,
 
                     success = true,
 
                     request = function(timeout)
-                        return request(remoteAddr, port, localAddr, timeout)
+                        return request(remoteAddr, port, localAddr, timeout, responsePort)
                     end,
 
                     requestSync = function(timeout)
-                        return requestSync(remoteAddr, port, localAddr, timeout)
+                        return requestSync(remoteAddr, port, localAddr, timeout, responsePort)
                     end
                 }
 

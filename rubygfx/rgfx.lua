@@ -284,7 +284,7 @@ do -- doublebuffering
         if p0 == p1 then return true end
 
         local d0, d1 = dunpacki(p0), dunpacki(p1)
-        if d0 == EMPTY_CHAR_CODE or d1 == EMPTY_CHAR_CODE then return dunpackb(p0) == dunpackb(p1) end
+        if d0 == EMPTY_CHAR_CODE and d1 == EMPTY_CHAR_CODE then return dunpackb(p0) == dunpackb(p1) end
         return dunpackfb(p0) == dunpackfb(p1)
     end
     
@@ -413,7 +413,7 @@ do -- doublebuffering
                         backcolor = b1
                     end
                 
-                    if ch ~= EMPTY_CHAR and forecolor ~= f1 then
+                    if (ch ~= EMPTY_CHAR or op ~= 0) and forecolor ~= f1 then
                         gpu.setForeground(f1)
                         forecolor = f1
                     end
