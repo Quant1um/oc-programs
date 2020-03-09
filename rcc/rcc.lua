@@ -1,6 +1,3 @@
-package.loaded.rgfx = nil
-package.loaded.xrgfx = nil
-
 local event = require("event")
 local component = require("component")
 local rgfx = require("rgfx")
@@ -48,6 +45,11 @@ end
 local config, updateConfig
 do
     local path = shell.resolve(({...})[1] or "chamber", "cfg")
+    if not path then
+        io.stderr:write("No such datafile!\n")
+        return
+    end
+
     local datafile, err = io.open(path, "r")
     if not datafile then
         io.stderr:write("Error while reading datafile: " .. err .. "\n")
@@ -141,7 +143,8 @@ local state = {
         heat = limqueue.create(150),
         energy = limqueue.create(150),
         production = limqueue.create(150),
-        consumption = limqueue.create(150)
+        consumption = limqueue.create(150),
+        fuel = limqueue.create(150)
     },
 
     explanation = "",
@@ -158,8 +161,7 @@ local state = {
         value = 0,
         max = 0,
         delta = 0,
-        rel = 0,
-        producing = false
+        rel = 0
     },
 
     fuel = {
@@ -170,7 +172,8 @@ local state = {
     },
 
     consumption = 0,
-    output = 0
+    output = 0,
+    producing = false
 }
 
 local redraw, w, h
@@ -347,6 +350,33 @@ do
         text(gxstart, gend + 1, name, colors.light)
     end
 
+    local function timegraph(gstart, gend, gxstart, gxend, limq, color, name)
+        local min = math.huge
+        local max = -math.huge
+
+        for _, v in limqueue.iterate(limq) do
+            if v == nil then break end
+            min = math.min(v, min)
+            max = math.max(v, max)
+        end
+
+        local center = (min + max) / 2
+        local diff   = (max - min) / 2
+        diff = math.max(diff, 32)
+        min = math.max(center - diff, 0)
+        max = center + diff
+        
+        graph(gstart, gend, gxstart, gxend, color, function(i)
+            local v = limqueue.get(limq, i)
+            if v == nil then return nil end
+            return (v - min) / (max - min)
+        end)
+
+        textr(gxend, gstart - 1, ftime(max), colors.light)
+        textr(gxend, gend + 1, ftime(min), colors.light)
+        text(gxstart, gend + 1, name, colors.light)
+    end
+
     local graphDrawers = {
         function(gstart, gend, gxstart, gxend)
             defgraph(gstart, gend, gxstart, gxend, state.history.energy, colors.sblue, "ACCUMULATED")
@@ -361,7 +391,11 @@ do
         end,
 
         function(gstart, gend, gxstart, gxend)
-            eutgraph(gstart, gend, gxstart, gxend, state.history.consumption, colors.sgreen, "CONSUMPTION")
+            eutgraph(gstart, gend, gxstart, gxend, state.history.consumption, colors.blue, "CONSUMPTION")
+        end,
+
+        function(gstart, gend, gxstart, gxend)
+            timegraph(gstart, gend, gxstart, gxend, state.history.fuel, colors.green, "FUEL LEFT")
         end
     }
 
@@ -370,14 +404,6 @@ do
         w, h = front.w, front.h
 
         buf.fill(front, " ", colors.white, colors.back)
-
-        --[[text(5, 3, "CONSUMPTION", colors.white)
-        textr(w - 5, 3, fnumi(state.consumption) .. " EU/t", colors.white)
-        bar(4, state.consumption / state.output, colors.dgreen, colors.green, colors.sgreen)
-
-        text(5, 6, "PRODUCTION", colors.white)
-        textr(w - 5, 6, fnumi(state.output) .. " EU/t", colors.white)
-        bar(7, state.output / state.consumption, colors.dgreen, colors.green, colors.sgreen)]]
 
         local panel = h - 2
 
@@ -596,8 +622,9 @@ do
         state.energy.value = buffer.getEnergy()
         state.energy.max = buffer.getCapacity()
         state.energy.rel = (state.energy.value / state.energy.max) or 0
-        state.energy.producing = state.energy.value > 0
+        
         state.output = chamber.getReactorEUOutput()
+        state.producing = state.output > 0
 
         calculateDelta()
 
@@ -630,7 +657,7 @@ do
             return "OUT OF FUEL"
         end
 
-        if state.energy.producing then
+        if state.producing then
             if state.active then
                 return "ENABLED: " .. state.explanation
             else
@@ -661,6 +688,7 @@ do
         limqueue.push(state.history.heat,           state.heat.rel)
         limqueue.push(state.history.production,     state.output)
         limqueue.push(state.history.consumption,    state.consumption)
+        limqueue.push(state.history.fuel,           state.fuel.value)
     end
 
     function events.touch(screenAddress, x, y, button, player)
