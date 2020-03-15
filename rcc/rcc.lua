@@ -8,6 +8,8 @@ local computer = require("computer")
 local unicode = require("unicode")
 local buf = rgfx.buffer
 
+local debug = false
+
 local limqueue = {}
 do
     function limqueue.create(limit)
@@ -118,12 +120,6 @@ end
 local transposerSide = nil
 for i = 0, 5 do
     if transposer.getInventorySize(i) then
-        if transposerSide then 
-            io.stderr:write("Invalid component configuration: transposer side ambiguity\n")
-            io.stderr:write("Reconfigure components in the datafile!\n")
-            return
-        end
-
         transposerSide = i
     end
 end
@@ -137,6 +133,7 @@ print("Transposer: "    .. transposer.address)
 os.sleep(0.02)
 
 local state = { 
+    error = false,
     configure = nil,
     graph = 0,
     history = {
@@ -653,6 +650,10 @@ do
     end
 
     local function getDescription()
+        if state.error then 
+            return "ERRORED: " .. tostring(state.error):sub(1, 30)
+        end
+
         if state.fuel.rods == 0 then
             return "OUT OF FUEL"
         end
@@ -676,9 +677,19 @@ do
         state.description = getDescription()
     end
 
-    function events.update()
+    local function updateAll()
         readState()
         controlState()
+    end
+
+    function events.update()
+        if debug then
+            updateAll()
+        else
+            local success, err = pcall(updateAll)
+            state.error = not success and err
+        end
+
         updateDescription()
         redraw()
     end
